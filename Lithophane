@@ -1,0 +1,140 @@
+# From  https://www.youtube.com/watch?v=HL-oukeabhU&list=PL9qELR-GZo-k8j1VziF1oSvKrjaa0ry4_
+
+
+import bpy
+import bmesh
+
+def make_displacement_setup(obj):
+    """
+    1) Add & apply Solidify modifier
+    2) In Edit Mode, pick the 'top' face, subdivide it 20 times, 
+       and create a vertex group.
+    3) Add a Subdivision Surface (Simple) modifier, level 6
+    4) Add a Displace modifier, create a new Image Texture,
+       attempt to link an image named 'obj.name + .png/.jpg',
+       set mid_level to 0.1
+    5) Finally, set the object's scale.z to 0.016 (16 mm).
+    """
+
+    # ------------------------------------------------------------------
+    # 0) Ensure we are in OBJECT mode with only one object selected
+    # ------------------------------------------------------------------
+    if bpy.ops.object.mode_set.poll():
+        bpy.ops.object.mode_set(mode='OBJECT')
+    if not obj or obj.type != 'MESH':
+        print("Please select a single mesh object.")
+        return
+
+    # ------------------------------------------------------------------
+    # 1) Add & Apply Solidify modifier
+    # ------------------------------------------------------------------
+    solid_mod = obj.modifiers.new(name="Solidify", type='SOLIDIFY')
+    # Adjust thickness if needed, e.g.:
+    # solid_mod.thickness = 0.01
+
+    # Apply the Solidify modifier
+    bpy.ops.object.modifier_apply(modifier=solid_mod.name)
+
+    # ------------------------------------------------------------------
+    # 2) Enter Edit Mode, pick the "top" face, subdivide it 20 times,
+    #    and create a vertex group for it.
+    # ------------------------------------------------------------------
+    bpy.ops.object.mode_set(mode='EDIT')
+    # Ensure we are in FACE selection mode
+    bpy.ops.mesh.select_mode(type='FACE')
+    bpy.ops.mesh.select_all(action='DESELECT')
+
+    # Access the BMesh
+    me = obj.data
+    bm = bmesh.from_edit_mesh(me)
+
+    # Find the face with the highest average Z
+    top_face = None
+    top_z = float('-inf')
+    for f in bm.faces:
+        avg_z = sum(v.co.z for v in f.verts) / len(f.verts)
+        if avg_z > top_z:
+            top_z = avg_z
+            top_face = f
+
+    if top_face is None:
+        print("No face found. Aborting.")
+        bpy.ops.object.mode_set(mode='OBJECT')
+        return
+
+    # Select only that top face
+    for f in bm.faces:
+        f.select = False
+    top_face.select = True
+
+    # Update bmesh selection
+    bmesh.update_edit_mesh(me)
+
+    # Subdivide the selected face by 20 cuts
+    bpy.ops.mesh.subdivide(number_cuts=20)
+
+    # Create a new vertex group and assign the selected face’s vertices
+    bpy.ops.object.vertex_group_add()  # creates new group, makes it active
+    active_vg = obj.vertex_groups.active
+    active_vg.name = "TopFaceGroup"
+
+    bpy.ops.object.vertex_group_assign()  # Assign selected verts to this group
+
+    # ------------------------------------------------------------------
+    # 3) Back to OBJECT mode, add Subsurf (Simple) & Displace modifiers
+    # ------------------------------------------------------------------
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Add Subdivision Surface modifier with 'SIMPLE' subdivision
+    subsurf_mod = obj.modifiers.new(name="Subdivision", type='SUBSURF')
+    subsurf_mod.subdivision_type = 'SIMPLE'
+    subsurf_mod.levels = 6
+    subsurf_mod.render_levels = 6
+
+    # Add Displace modifier
+    disp_mod = obj.modifiers.new(name="Displace", type='DISPLACE')
+
+    # Create a new Texture for Displacement
+    disp_tex = bpy.data.textures.new(name=obj.name + "_DispTex", type='IMAGE')
+
+    # Attempt to link an existing image in bpy.data.images
+    # that matches object_name + ".png" or object_name + ".jpg"
+    image = None
+    possible_image_names = [obj.name + ".png", obj.name + ".jpg"]
+    for img_name in possible_image_names:
+        img_candidate = bpy.data.images.get(img_name)
+        if img_candidate:
+            image = img_candidate
+            break
+    if image is None:
+        print(f"Could not find any of: {possible_image_names} in bpy.data.images")
+    else:
+        disp_tex.image = image
+
+    disp_mod.texture = disp_tex
+    disp_mod.texture_coords = 'UV'
+    disp_mod.uv_layer = "UVMap"     # Ensure your object's UV map is named "UVMap"
+    disp_mod.direction = 'Z'
+    disp_mod.vertex_group = "TopFaceGroup"
+
+    # Set mid_level to 0.1
+    disp_mod.mid_level = -0.1
+
+    # ------------------------------------------------------------------
+    # 5) Set the object's local scale.z to 0.016 (16 mm)
+    # ------------------------------------------------------------------
+    obj.scale.z = 0.016
+
+
+# ----------------------------------------------------------------------
+# Usage Example:
+# ----------------------------------------------------------------------
+# 1) Select your 'Image as Plane' object in the viewport.
+# 2) Run this script in the Blender Text Editor.
+
+if __name__ == "__main__":
+    obj = bpy.context.view_layer.objects.active
+    if obj:
+        make_displacement_setup(obj)
+    else:
+        print("No active object selected.")
