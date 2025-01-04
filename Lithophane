@@ -1,5 +1,7 @@
-# From  https://www.youtube.com/watch?v=HL-oukeabhU&list=PL9qELR-GZo-k8j1VziF1oSvKrjaa0ry4_
+# 1) Select your 'Image as Plane' object in the viewport.
+# 2) Run this script in the Blender Text Editor to make a lithophane.
 
+# From  https://www.youtube.com/watch?v=HL-oukeabhU&list=PL9qELR-GZo-k8j1VziF1oSvKrjaa0ry4_
 
 import bpy
 import bmesh
